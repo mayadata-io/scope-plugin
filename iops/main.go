@@ -253,7 +253,6 @@ func (p *Plugin) metricTemplates() map[string]metricTemplate {
 // Report is called by scope when a new report is needed. It is part of the
 // "reporter" interface, which all plugins must implement.
 func (p *Plugin) Report(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL.String())
 	rpt, err := p.makeReport()
 	if err != nil {
 		log.Printf("error: %v", err)
