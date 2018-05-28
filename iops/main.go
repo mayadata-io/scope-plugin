@@ -18,8 +18,8 @@ import (
 
 var url string
 var clientset *kubernetes.Clientset
-var readch chan map[string]float64
-var writech chan map[string]float64
+var readch chan map[string]int64
+var writech chan map[string]int64
 
 // Plugin groups the methods a plugin needs
 type Plugin struct {
@@ -56,7 +56,7 @@ type metric struct {
 
 type sample struct {
 	Date  time.Time `json:"date"`
-	Value float64   `json:"value"`
+	Value int64     `json:"value"`
 }
 
 type metricTemplate struct {
@@ -122,8 +122,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	readch = make(chan map[string]float64)
-	writech = make(chan map[string]float64)
+	readch = make(chan map[string]int64)
+	writech = make(chan map[string]int64)
 
 	defer func() {
 		listener.Close()
@@ -207,7 +207,7 @@ func (p *Plugin) makeReport() (*report, error) {
 }
 
 // Create the Metrics type on top-left side
-func (p *Plugin) metrics(read, write float64) map[string]metric {
+func (p *Plugin) metrics(read, write int64) map[string]metric {
 	metrics := map[string]metric{
 		"r": {
 			Samples: []sample{
@@ -273,4 +273,3 @@ func (p *Plugin) Report(w http.ResponseWriter, r *http.Request) {
 func (p *Plugin) metricIDAndName() (string, string) {
 	return "iops", "Iops"
 }
-

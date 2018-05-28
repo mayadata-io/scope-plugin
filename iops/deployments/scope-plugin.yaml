@@ -3,20 +3,19 @@ kind: Deployment
 metadata:
   labels:
     app: weavescope
-    weavescope-component: weavescope-iowait-plugin
     name: cortex-agent-retriever
-  name: weavescope-iowait-plugin
+  name: openebs-iops-plugin
+  namespace: maya-system
 spec:
   template:
     metadata:
       labels:
         app: weavescope
-        weavescope-component: weavescope-iowait-plugin
     spec:
       hostPID: true
       containers:
-        - name: weavescope-iowait-plugin
-          image: weaveworksplugins/scope-iops:latest
+        - name: openebs-iops-plugin
+          image: openebs/scope-iops:latest
           imagePullPolicy: Always
           securityContext:
             privileged: true
