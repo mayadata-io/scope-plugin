@@ -11,12 +11,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var pv = make(map[string]float64)
+var pv = make(map[string]int64)
 var storeAfter *Iops
 
 type pvdata struct {
-	read  float64
-	write float64
+	read  int64
+	write int64
 }
 
 func getValues(urlpassed string, query string) {
@@ -58,7 +58,7 @@ func getValues(urlpassed string, query string) {
 	for _, result := range storeBefore.Data.Result {
 		for _, newresult := range storeAfter.Data.Result {
 			if result.Metric.OpenebsPv == newresult.Metric.OpenebsPv {
-				pv[result.Metric.OpenebsPv] = math.Abs(result.Value[0].(float64) - newresult.Value[0].(float64))
+				pv[result.Metric.OpenebsPv] = int64(math.Abs(result.Value[0].(float64) - newresult.Value[0].(float64)))
 			}
 		}
 	}
@@ -76,7 +76,7 @@ func getPVs() map[string]pvdata {
 	for _, query := range queries {
 		go getValues(url+query, query)
 	}
-	var read, write map[string]float64
+	var read, write map[string]int64
 	for i := 0; i < len(queries); i++ {
 		select {
 		case read = <-readch:
@@ -109,4 +109,3 @@ func (p *Plugin) updatePVs() {
 func (p *Plugin) getTopologyPv(str string) string {
 	return fmt.Sprintf("%s;<persistent_volume>", str)
 }
-
