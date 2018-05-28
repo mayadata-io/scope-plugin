@@ -15,7 +15,7 @@ spec:
       hostPID: true
       containers:
         - name: openebs-iops-plugin
-          image: akash4927/iops:latest
+          image: openebs/scope-iops:latest
           imagePullPolicy: Always
           securityContext:
             privileged: true
