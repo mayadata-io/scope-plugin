@@ -1,0 +1,57 @@
+general:
+  branches:
+    ignore:
+      - gh\-pages
+      - /pull\/.*/
+
+machine:
+  services:
+    - docker
+  environment:
+    GOPATH: /home/ubuntu:$GOPATH
+    SRCDIR: /home/ubuntu/src/github.com/weaveworks/weave
+    PATH: $PATH:$HOME/.local/bin
+    CLOUDSDK_CORE_DISABLE_PROMPTS: 1
+    STATE: /home/ubuntu/state.env
+
+dependencies:
+  cache_directories:
+    - "~/docker"
+  post:
+    - bin/circle-dependencies-post
+
+test:
+  pre:
+    - "$SRCDIR/bin/circle-test-pre":
+        parallel: true
+  override:
+    - "$SRCDIR/bin/circle-test-unit":
+        parallel: true
+    - "$SRCDIR/bin/circle-test-smoke":
+        parallel: true
+        timeout: 300
+  post:
+    - "$SRCDIR/bin/circle-test-teardown":
+        parallel: true
+
+teardown:
+  pre:
+    - "$SRCDIR/bin/circle-teardown-pre":
+        parallel: true
+
+deployment:
+  release:
+    branch: /[0-9]+\.[0-9]+/
+    owner: weaveworks
+    commands:
+      - "$SRCDIR/bin/circle-deploy-release"
+  master:
+    branch: master
+    owner: weaveworks
+    commands:
+      - "$SRCDIR/bin/circle-deploy-master"
+  issues:
+    branch: /.*/
+    owner: weaveworks
+    commands:
+      - "$SRCDIR/bin/circle-deploy-issues"
