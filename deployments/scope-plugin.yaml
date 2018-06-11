@@ -1,0 +1,33 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: weave-scope
+    name: cortex-agent-retriever
+  name: openebs-iops-plugin
+  namespace: maya-system
+spec:
+  template:
+    metadata:
+      labels:
+        app: weave-scope
+    spec:
+      hostPID: true
+      serviceAccountName: weave-scope
+      containers:
+        - name: openebs-iops-plugin
+          image: openebs/scope-iops:latest
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          volumeMounts:
+          - name: scope-plugins
+            mountPath: /var/run/scope/plugins
+          env:
+          - name: CORTEXAGENT
+            value: "http://cortex-agent-service.maya-system.svc.cluster.local:80/api/v1/query?query="
+      volumes:
+      - name: scope-plugins
+        hostPath:
+          path: /var/run/scope/plugins
+

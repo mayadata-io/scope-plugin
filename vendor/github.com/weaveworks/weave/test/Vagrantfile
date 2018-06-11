@@ -1,0 +1,62 @@
+VAGRANTFILE_API_VERSION = "2"
+
+# Necessary because the switch disabling unwanted insecure key
+# replacement in Vagrant 1.7+ is not accepted by earlier versions
+Vagrant.require_version ">= 1.7.0"
+
+# these ought to match what is in config.sh
+n_machines = 3
+ip_prefix = "192.168.48"
+ip_suffix_base = 10
+
+require '../vagrant-common.rb'
+
+def configure_docker(host, hostname, ip)
+  pkgs = %w(docker-engine ethtool)
+
+  host.vm.box = "ubuntu/wily64"
+
+  host.vm.provision :shell, :inline => "hostnamectl set-hostname "+hostname
+  host.vm.network "private_network", ip: ip
+
+  host.vm.synced_folder ".", "/vagrant", disabled: true
+
+  host.vm.provision :shell, :inline => "sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D"
+  host.vm.provision :shell, :inline => "echo deb https://apt.dockerproject.org/repo ubuntu-wily main > /etc/apt/sources.list.d/docker.list"
+
+  install_packages host.vm, pkgs
+  tweak_docker_daemon host.vm
+  cleanup host.vm
+end
+
+def configure_resolv_conf(host)
+  # Fix the resolution errors by using 8.8.8.8
+  host.vm.provision :shell, :inline => "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"
+end
+
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  config.vm.provider :virtualbox do |vb|
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "off"]
+    vb.customize ["modifyvm", :id, "--natdnsproxy1", "off"]
+    vb.memory = 384
+  end
+
+  # Disable Vagrant 1.7 per host insecure key replacement
+  config.ssh.insert_key = false
+
+  (1..n_machines).each do |i|
+    config.vm.define "host#{i}" do |host|
+      ip_suffix = ip_suffix_base + i
+      configure_resolv_conf(host)
+      configure_docker(host, "host#{i}", "#{ip_prefix}.#{ip_suffix}")
+    end
+  end
+
+end
+
+begin
+  load 'Vagrantfile.local'
+rescue LoadError
+end
