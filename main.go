@@ -20,10 +20,16 @@ var url string
 var clientset *kubernetes.Clientset
 var readch chan map[string]float64
 var writech chan map[string]float64
+var readLatencych chan map[string]float64
+var writeLatencych chan map[string]float64
+var readThroughputch chan map[string]float64
+var writeThroughputch chan map[string]float64
 
 // Plugin groups the methods a plugin needs
 type Plugin struct {
-	pvs map[string]pvdata
+	pvs     map[string]pvdata
+	Latpvs  map[string]pvLatdata
+	Tputpvs map[string]pvTputdata
 }
 
 type request struct {
@@ -124,6 +130,10 @@ func main() {
 
 	readch = make(chan map[string]float64)
 	writech = make(chan map[string]float64)
+	readLatencych = make(chan map[string]float64)
+	writeLatencych = make(chan map[string]float64)
+	readThroughputch = make(chan map[string]float64)
+	writeThroughputch = make(chan map[string]float64)
 
 	defer func() {
 		listener.Close()
@@ -166,7 +176,9 @@ func setupSignals(socketPath string) {
 // NewPlugin instantiates a new plugin
 func NewPlugin() (*Plugin, error) {
 	plugin := &Plugin{
-		pvs: getPVs(),
+		pvs:     getPVs(),
+		Latpvs:  getLatPVs(),
+		Tputpvs: getTputPVs(),
 	}
 	return plugin, nil
 }
@@ -180,12 +192,42 @@ func getValue(body []byte) (*Iops, error) {
 	return storeBefore, err
 }
 
+func getLatValue(body []byte) (*Iops, error) {
+	s1 := new(Iops)
+	err := json.Unmarshal(body, &s1)
+	if err != nil {
+		fmt.Println("whoops:")
+	}
+	return s1, err
+}
+
+func getTputValue(body []byte) (*Iops, error) {
+	s2 := new(Iops)
+	err := json.Unmarshal(body, &s2)
+	if err != nil {
+		fmt.Println("whoops:")
+	}
+	return s2, err
+}
+
 func (p *Plugin) makeReport() (*report, error) {
 	go p.updatePVs()
+	go p.updateLatPVs()
+	go p.updateTputPVs()
+	metrics := make(map[string][]float64)
 	resource := make(map[string]node)
 	for k, v := range p.pvs {
-		resource[p.getTopologyPv(k)] = node{
-			Metrics: p.metrics(v.read, v.write),
+		metrics[p.getTopologyPv(k)] = append(metrics[p.getTopologyPv(k)], v.read, v.write)
+	}
+	for x, y := range p.Latpvs {
+		metrics[p.getTopologyPv1(x)] = append(metrics[p.getTopologyPv1(x)], y.readLatency, y.writeLatency)
+	}
+	for c, d := range p.Tputpvs {
+		metrics[p.getTopologyPv2(c)] = append(metrics[p.getTopologyPv2(c)], d.readThroughput, d.writeThroughput)
+	}
+	for a, _ := range metrics {
+		resource[a] = node{
+			Metrics: p.metrics(metrics[a]),
 		}
 	}
 	rpt := &report{
@@ -207,13 +249,13 @@ func (p *Plugin) makeReport() (*report, error) {
 }
 
 // Create the Metrics type on top-left side
-func (p *Plugin) metrics(read, write float64) map[string]metric {
+func (p *Plugin) metrics(data []float64) map[string]metric {
 	metrics := map[string]metric{
 		"r": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
-					Value: read,
+					Value: data[0],
 				},
 			},
 			Min: 0,
@@ -223,7 +265,47 @@ func (p *Plugin) metrics(read, write float64) map[string]metric {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
-					Value: write,
+					Value: data[1],
+				},
+			},
+			Min: 0,
+			Max: 20,
+		},
+		"r1": {
+			Samples: []sample{
+				{
+					Date:  time.Now(),
+					Value: data[2],
+				},
+			},
+			Min: 0,
+			Max: 20,
+		},
+		"w1": {
+			Samples: []sample{
+				{
+					Date:  time.Now(),
+					Value: data[3],
+				},
+			},
+			Min: 0,
+			Max: 20,
+		},
+		"r2": {
+			Samples: []sample{
+				{
+					Date:  time.Now(),
+					Value: data[4],
+				},
+			},
+			Min: 0,
+			Max: 20,
+		},
+		"w2": {
+			Samples: []sample{
+				{
+					Date:  time.Now(),
+					Value: data[5],
 				},
 			},
 			Min: 0,
@@ -237,15 +319,39 @@ func (p *Plugin) metricTemplates() map[string]metricTemplate {
 	return map[string]metricTemplate{
 		"r": {
 			ID:       "r",
-			Label:    "Read",
-			Format:   "percentage",
+			Label:    "R-Iops",
+			Format:   "seconds",
 			Priority: 0.1,
 		},
 		"w": {
 			ID:       "w",
-			Label:    "Write",
-			Format:   "percentage",
+			Label:    "W-Iops",
+			Format:   "seconds",
 			Priority: 0.2,
+		},
+		"r1": {
+			ID:       "r1",
+			Label:    "R-Latency",
+			Format:   "millisecond",
+			Priority: 0.3,
+		},
+		"w1": {
+			ID:       "w1",
+			Label:    "W-Latency",
+			Format:   "millisecond",
+			Priority: 0.4,
+		},
+		"r2": {
+			ID:       "r2",
+			Label:    "R-Tput",
+			Format:   "bytes",
+			Priority: 0.5,
+		},
+		"w2": {
+			ID:       "w2",
+			Label:    "W-Tput",
+			Format:   "bytes",
+			Priority: 0.6,
 		},
 	}
 }
