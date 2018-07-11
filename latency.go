@@ -29,7 +29,7 @@ func getLatValues(urlpassed string, query string) {
 		panic(err.Error())
 	}
 
-	s1, err := getValue([]byte(body))
+	s1, err := getLatValue([]byte(body))
 	if err != nil {
 		panic(err.Error())
 	}
