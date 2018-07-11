@@ -18,12 +18,12 @@ import (
 
 var url string
 var clientset *kubernetes.Clientset
-var readch chan map[string]float64
-var writech chan map[string]float64
-var readLatencych chan map[string]float64
-var writeLatencych chan map[string]float64
-var readThroughputch chan map[string]float64
-var writeThroughputch chan map[string]float64
+var readch = make(chan map[string]float64)
+var writech = make(chan map[string]float64)
+var readLatencych = make(chan map[string]float64)
+var writeLatencych = make(chan map[string]float64)
+var readThroughputch = make(chan map[string]float64)
+var writeThroughputch = make(chan map[string]float64)
 
 // Plugin groups the methods a plugin needs
 type Plugin struct {
@@ -127,13 +127,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	readch = make(chan map[string]float64)
-	writech = make(chan map[string]float64)
-	readLatencych = make(chan map[string]float64)
-	writeLatencych = make(chan map[string]float64)
-	readThroughputch = make(chan map[string]float64)
-	writeThroughputch = make(chan map[string]float64)
 
 	defer func() {
 		listener.Close()
@@ -319,37 +312,37 @@ func (p *Plugin) metricTemplates() map[string]metricTemplate {
 	return map[string]metricTemplate{
 		"r": {
 			ID:       "r",
-			Label:    "R-Iops",
-			Format:   "seconds",
+			Label:    "Iops(R)",
+			Format:   "",
 			Priority: 0.1,
 		},
 		"w": {
 			ID:       "w",
-			Label:    "W-Iops",
-			Format:   "seconds",
+			Label:    "Iops(W)",
+			Format:   "",
 			Priority: 0.2,
 		},
 		"r1": {
 			ID:       "r1",
-			Label:    "R-Latency",
+			Label:    "Latency(R)",
 			Format:   "millisecond",
 			Priority: 0.3,
 		},
 		"w1": {
 			ID:       "w1",
-			Label:    "W-Latency",
+			Label:    "Latency(W)",
 			Format:   "millisecond",
 			Priority: 0.4,
 		},
 		"r2": {
 			ID:       "r2",
-			Label:    "R-Tput",
+			Label:    "Tput(R)",
 			Format:   "bytes",
 			Priority: 0.5,
 		},
 		"w2": {
 			ID:       "w2",
-			Label:    "W-Tput",
+			Label:    "Tput(W)",
 			Format:   "bytes",
 			Priority: 0.6,
 		},

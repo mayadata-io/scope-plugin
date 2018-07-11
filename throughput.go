@@ -29,7 +29,7 @@ func getTputValues(urlpassed string, query string) {
 		panic(err.Error())
 	}
 
-	s2, err := getValue([]byte(body))
+	s2, err := getTputValue([]byte(body))
 	if err != nil {
 		panic(err.Error())
 	}
