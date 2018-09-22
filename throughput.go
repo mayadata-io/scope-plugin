@@ -1,87 +1,90 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"strconv"
-	"time"
 
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var Throughput = make(map[string]float64)
+var (
+	throughputReadChan  = make(chan map[string]float64)
+	throughputWriteChan = make(chan map[string]float64)
+)
 
-type pvTputdata struct {
-	readThroughput  float64
-	writeThroughput float64
+var (
+	throughputReadQuery  = "increase(openebs_read_block_count[5m])/(1024*1024*60*5)"
+	throughputWriteQuery = "increase(openebs_write_block_count[5m])/(1024*1024*60*5)"
+)
+
+func getThroughputValues(query string) {
+	res, err := http.Get(URL + query)
+	if err != nil {
+		log.Error(err)
+	}
+
+	responseBody, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Error(err)
+	}
+
+	response, err := Response([]byte(responseBody))
+	if err != nil {
+		log.Error(err)
+	}
+
+	throughputMetrics := make(map[string]float64)
+
+	for _, result := range response.Data.Result {
+		throughputMetrics[result.Metric.OpenebsPv], _ = strconv.ParseFloat(result.Value[1].(string), 32)
+	}
+
+	if query == throughputReadQuery {
+		throughputReadChan <- throughputMetrics
+	} else {
+		throughputWriteChan <- throughputMetrics
+	}
 }
 
-func getTputValues(urlpassed string, query string) {
-	res, err := http.Get(urlpassed)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	s2, err := getTputValue([]byte(body))
-	if err != nil {
-		panic(err.Error())
-	}
-	rand.Seed(time.Now().Unix())
-
-	for _, result := range s2.Data.Result {
-		Throughput[result.Metric.OpenebsPv], _ = strconv.ParseFloat(result.Value[1].(string), 32)
-		Throughput[result.Metric.OpenebsPv] = Throughput[result.Metric.OpenebsPv] / (1024 * 1024)
-	}
-
-	if query == "OpenEBS_read_block_count_per_second" {
-		readThroughputch <- Throughput
-	} else if query == "OpenEBS_write_block_count_per_second" {
-		writeThroughputch <- Throughput
-	}
-}
-
-func getTputPVs() map[string]pvTputdata {
-	queries := []string{"OpenEBS_read_block_count_per_second", "OpenEBS_write_block_count_per_second"}
+func getThroughputMetrics() map[string]PVMetrics {
+	queries := []string{throughputReadQuery, throughputWriteQuery}
 	for _, query := range queries {
-		go getTputValues(url+query, query)
+		go getThroughputValues(query)
 	}
-	var readThroughput, writeThroughput map[string]float64
+
+	readThroughput := make(map[string]float64)
+	writeThroughput := make(map[string]float64)
+
 	for i := 0; i < len(queries); i++ {
 		select {
-		case readThroughput = <-readThroughputch:
-		case writeThroughput = <-writeThroughputch:
+		case readThroughput = <-throughputReadChan:
+		case writeThroughput = <-throughputWriteChan:
 		}
 	}
-	Throughput := make(map[string]pvTputdata)
-	if len(readThroughput) == len(writeThroughput) {
-		for k2, v2 := range readThroughput {
-			metaTput, err := clientset.CoreV1().PersistentVolumes().Get(k2, metav1.GetOptions{})
+
+	throughput := make(map[string]PVMetrics)
+	if len(readThroughput) > 0 && len(writeThroughput) > 0 {
+		for pvName, throughputRead := range readThroughput {
+			meta, err := ClientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
 			if err != nil {
+				log.Errorf("error in fetching PV: %+v", err)
 				continue
 			}
-			Throughput[string(metaTput.UID)] = pvTputdata{
-				readThroughput:  v2,
-				writeThroughput: writeThroughput[k2],
+
+			throughput[string(meta.UID)] = PVMetrics{
+				ReadThroughput:  throughputRead,
+				WriteThroughput: writeThroughput[pvName],
 			}
 		}
 	}
-	return Throughput
+	return throughput
 }
 
-func (p *Plugin) updateTputPVs() {
-	m2 := getTputPVs()
-	if len(m2) > 0 {
-		p.Tputpvs = m2
+func (p *Plugin) updateThroughput() {
+	throughputMetrics := getThroughputMetrics()
+	if len(throughputMetrics) > 0 {
+		p.Throughput = throughputMetrics
 	}
-}
-
-func (p *Plugin) getTopologyPv2(str string) string {
-	return fmt.Sprintf("%s;<persistent_volume>", str)
 }
