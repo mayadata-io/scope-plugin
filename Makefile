@@ -8,17 +8,9 @@ NAME=$(ORGANIZATION)-scope-$(EXE)
 UPTODATE=.$(EXE).uptodate
 
 run: $(UPTODATE)
-	# --net=host gives us the remote hostname, in case we're being launched against a non-local docker host.
-	# We could also pass in the `-hostname=foo` flag, but that doesn't work against a remote docker host.
-	$(SUDO) docker run --rm -it \
-		--net=host \
-		-v /var/run/scope/plugins:/var/run/scope/plugins \
-		--name $(NAME) $(IMAGE)
-
 $(UPTODATE): $(EXE) Dockerfile
 	$(SUDO) docker build -t $(IMAGE):latest .
-	touch $@
-
+	
 $(EXE): main.go
 	$(SUDO) docker run --rm \
 	-v "$$PWD":/go/src/hosting/org/$(EXE) \
