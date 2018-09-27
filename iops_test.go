@@ -25,7 +25,7 @@ func TestGetValues(t *testing.T) {
 				ResponseBody: string(resp),
 				T:            t,
 			},
-			queryType: "OpenEBS_read_iops",
+			queryType: "/openebs_reads",
 			channel:   "read",
 			ExpectedOutput: map[string]int{
 				"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83": 0,
@@ -37,7 +37,7 @@ func TestGetValues(t *testing.T) {
 				ResponseBody: string(resp),
 				T:            t,
 			},
-			queryType: "OpenEBS_write_iops",
+			queryType: "/openebs_writes",
 			channel:   "write",
 			ExpectedOutput: map[string]int{
 				"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83": 0,
@@ -48,46 +48,21 @@ func TestGetValues(t *testing.T) {
 	for name, tt := range cases {
 		t.Run(name, func(t *testing.T) {
 			server := httptest.NewServer(&tt.fakeHandler)
-			go getValues(server.URL, tt.queryType)
+			URL = server.URL
+			go getValues(tt.queryType)
+			if tt.queryType == "/openebs_reads" {
+				iopsReadQuery = tt.queryType
+			}
 			if tt.channel == "read" {
-				read := <-readch
+				read := <-iopsReadChan
 				if eq := reflect.DeepEqual(read, tt.ExpectedOutput); eq {
 					t.Errorf("Test Name :%v\nExpected :%v but got :%v", name, tt.ExpectedOutput, read)
 				}
 			} else if tt.channel == "write" {
-				write := <-writech
+				write := <-iopsWriteChan
 				if eq := reflect.DeepEqual(write, tt.ExpectedOutput); eq {
 					t.Errorf("Test Name :%v\nExpected :%v but got :%v", name, tt.ExpectedOutput, write)
 				}
-			}
-		})
-	}
-}
-
-func TestPlugin_getTopologyPv(t *testing.T) {
-	type args struct {
-		str string
-	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{
-			name: "Persistent Volume",
-			args: args{
-				str: "123456",
-			},
-			want: "123456;<persistent_volume>",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &Plugin{
-				pvs: nil,
-			}
-			if got := p.getTopologyPv(tt.args.str); got != tt.want {
-				t.Errorf("Plugin.getTopologyPv() = %v, want %v", got, tt.want)
 			}
 		})
 	}
