@@ -16,11 +16,13 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+//Declaring URL and clientset as global variables.
 var (
 	URL       string
 	ClientSet *kubernetes.Clientset
 )
 
+// PVMetrics groups the data a plugin needs.
 type PVMetrics struct {
 	ReadIops        float64
 	WriteIops       float64
@@ -30,6 +32,7 @@ type PVMetrics struct {
 	WriteThroughput float64
 }
 
+// Plugin struct groups the methods a plugin needs.
 type Plugin struct {
 	HostID     string
 	Iops       map[string]PVMetrics
@@ -85,6 +88,7 @@ type response struct {
 	ShortcutReport *report `json:"shortcutReport,omitempty"`
 }
 
+// Metrics stores the json.
 type Metrics struct {
 	Status string `json:"status"`
 	Data   struct {
@@ -126,6 +130,7 @@ func setupSignals(socketPath string) {
 	}()
 }
 
+// Response unmarshal the obtained Metric json
 func Response(response []byte) (*Metrics, error) {
 	result := new(Metrics)
 	err := json.Unmarshal(response, &result)
@@ -219,7 +224,7 @@ func (p *Plugin) makeReport() (*report, error) {
 		metrics[p.getPVTopology(pvUID)] = append(metrics[p.getPVTopology(pvUID)], throughputMetrics.ReadThroughput, throughputMetrics.WriteThroughput)
 	}
 
-	for pvName, _ := range metrics {
+	for pvName := range metrics {
 		resource[pvName] = node{
 			Metrics: p.metrics(metrics[pvName]),
 		}

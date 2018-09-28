@@ -21,3 +21,10 @@ $(EXE): main.go
 clean:
 	- rm -rf $(UPTODATE) $(EXE)
 	- $(SUDO) docker rmi $(IMAGE)
+
+test:
+	- go test 
+lint:
+	golint
+fmt:
+	- go fmt 
