@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,46 +11,38 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
-var url string
-var clientset *kubernetes.Clientset
-var readch = make(chan map[string]float64)
-var writech = make(chan map[string]float64)
-var readLatencych = make(chan map[string]float64)
-var writeLatencych = make(chan map[string]float64)
-var readThroughputch = make(chan map[string]float64)
-var writeThroughputch = make(chan map[string]float64)
+//Declaring URL and clientset as global variables.
+var (
+	URL       string
+	ClientSet *kubernetes.Clientset
+)
 
-// Plugin groups the methods a plugin needs
+// PVMetrics groups the data a plugin needs.
+type PVMetrics struct {
+	ReadIops        float64
+	WriteIops       float64
+	ReadLatency     float64
+	WriteLatency    float64
+	ReadThroughput  float64
+	WriteThroughput float64
+}
+
+// Plugin struct groups the methods a plugin needs.
 type Plugin struct {
-	pvs     map[string]pvdata
-	Latpvs  map[string]pvLatdata
-	Tputpvs map[string]pvTputdata
+	HostID     string
+	Iops       map[string]PVMetrics
+	Latency    map[string]PVMetrics
+	Throughput map[string]PVMetrics
 }
 
-type request struct {
-	NodeID string
-}
-
-type response struct {
-	ShortcutReport *report `json:"shortcutReport,omitempty"`
-}
-
-type report struct {
-	PersistentVolume topology
-	Plugins          []pluginSpec
-}
-
-type topology struct {
-	Nodes           map[string]node           `json:"nodes"`
-	MetricTemplates map[string]metricTemplate `json:"metric_templates"`
-}
-
-type node struct {
-	Metrics map[string]metric `json:"metrics"`
+type sample struct {
+	Date  time.Time `json:"date"`
+	Value float64   `json:"value"`
 }
 
 type metric struct {
@@ -60,16 +51,20 @@ type metric struct {
 	Max     float64  `json:"max"`
 }
 
-type sample struct {
-	Date  time.Time `json:"date"`
-	Value float64   `json:"value"`
-}
-
 type metricTemplate struct {
 	ID       string  `json:"id"`
 	Label    string  `json:"label,omitempty"`
 	Format   string  `json:"format,omitempty"`
 	Priority float64 `json:"priority,omitempty"`
+}
+
+type node struct {
+	Metrics map[string]metric `json:"metrics"`
+}
+
+type topology struct {
+	Nodes           map[string]node           `json:"nodes"`
+	MetricTemplates map[string]metricTemplate `json:"metric_templates"`
 }
 
 type pluginSpec struct {
@@ -80,8 +75,21 @@ type pluginSpec struct {
 	APIVersion  string   `json:"api_version,omitempty"`
 }
 
-// Iops struct
-type Iops struct {
+type request struct {
+	NodeID string
+}
+
+type report struct {
+	PersistentVolume topology
+	Plugins          []pluginSpec
+}
+
+type response struct {
+	ShortcutReport *report `json:"shortcutReport,omitempty"`
+}
+
+// Metrics stores the json.
+type Metrics struct {
 	Status string `json:"status"`
 	Data   struct {
 		ResultType string `json:"resultType"`
@@ -98,51 +106,6 @@ type Iops struct {
 	} `json:"data"`
 }
 
-// main function
-func main() {
-	// creates the in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// creates the clientset
-	clientset, err = kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// gets Url
-	url = os.Getenv("CORTEXAGENT")
-	if url == "" {
-		panic("Unable to retrieve the URL")
-	}
-
-	// we put the in a sub-directory to have more control on the permissions
-	const socketPath = "/var/run/scope/plugins/iops/iops.sock"
-
-	// Handle the exit signal
-	setupSignals(socketPath)
-	listener, err := setupSocket(socketPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer func() {
-		listener.Close()
-		os.RemoveAll(filepath.Dir(socketPath))
-	}()
-
-	plugin, err := NewPlugin()
-	if err != nil {
-		log.Fatalf("Failed to create a plugin: %v", err)
-	}
-	http.HandleFunc("/report", plugin.Report)
-	if err := http.Serve(listener, nil); err != nil {
-		log.Printf("error: %v", err)
-	}
-}
-
 func setupSocket(socketPath string) (net.Listener, error) {
 	os.RemoveAll(filepath.Dir(socketPath))
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err != nil {
@@ -152,6 +115,7 @@ func setupSocket(socketPath string) (net.Listener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %q: %v", socketPath, err)
 	}
+
 	log.Printf("Listening on: unix://%s", socketPath)
 	return listener, nil
 }
@@ -166,61 +130,103 @@ func setupSignals(socketPath string) {
 	}()
 }
 
-// NewPlugin instantiates a new plugin
-func NewPlugin() (*Plugin, error) {
+// Response unmarshal the obtained Metric json
+func Response(response []byte) (*Metrics, error) {
+	result := new(Metrics)
+	err := json.Unmarshal(response, &result)
+	return result, err
+}
+
+func main() {
+	// creating in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Error(err)
+	}
+
+	// create clientset of kubernetes
+	ClientSet, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Error(err)
+	}
+
+	URL = os.Getenv("CORTEXAGENT")
+	if URL == "" {
+		log.Info("Unable to get cortex agent URL")
+	}
+
+	// Put socket in sub-directory to have more control on permissions
+	const socketPath = "/var/run/scope/plugins/openebs/openebs.sock"
+
+	// Handle the exit signal
+	setupSignals(socketPath)
+	listener, err := setupSocket(socketPath)
+	if err != nil {
+		log.Error(err)
+	}
+
+	defer func() {
+		listener.Close()
+		os.RemoveAll(filepath.Dir(socketPath))
+	}()
+
 	plugin := &Plugin{
-		pvs:     getPVs(),
-		Latpvs:  getLatPVs(),
-		Tputpvs: getTputPVs(),
+		HostID: "host",
 	}
-	return plugin, nil
+
+	http.HandleFunc("/report", plugin.Report)
+	if err := http.Serve(listener, nil); err != nil {
+		log.Errorf("error: %v", err)
+	}
 }
 
-func getValue(body []byte) (*Iops, error) {
-	storeBefore := new(Iops)
-	err := json.Unmarshal(body, &storeBefore)
+// Report is called by scope when a new report is needed. It is part of the
+// "reporter" interface, which all plugins must implement.
+func (p *Plugin) Report(w http.ResponseWriter, r *http.Request) {
+	rpt, err := p.makeReport()
 	if err != nil {
-		fmt.Println("whoops:")
+		log.Errorf("error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	return storeBefore, err
+
+	raw, err := json.Marshal(*rpt)
+	if err != nil {
+		log.Errorf("error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(raw)
 }
 
-func getLatValue(body []byte) (*Iops, error) {
-	s1 := new(Iops)
-	err := json.Unmarshal(body, &s1)
-	if err != nil {
-		fmt.Println("whoops:")
-	}
-	return s1, err
-}
-
-func getTputValue(body []byte) (*Iops, error) {
-	s2 := new(Iops)
-	err := json.Unmarshal(body, &s2)
-	if err != nil {
-		fmt.Println("whoops:")
-	}
-	return s2, err
+func (p *Plugin) getPVTopology(PVName string) string {
+	return fmt.Sprintf("%s;<persistent_volume>", PVName)
 }
 
 func (p *Plugin) makeReport() (*report, error) {
-	go p.updatePVs()
-	go p.updateLatPVs()
-	go p.updateTputPVs()
+	go p.updateIops()
+	go p.updateLatency()
+	go p.updateThroughput()
+
 	metrics := make(map[string][]float64)
 	resource := make(map[string]node)
-	for k, v := range p.pvs {
-		metrics[p.getTopologyPv(k)] = append(metrics[p.getTopologyPv(k)], v.read, v.write)
+
+	for pvUID, iopsMetrics := range p.Iops {
+		metrics[p.getPVTopology(pvUID)] = append(metrics[p.getPVTopology(pvUID)], iopsMetrics.ReadIops, iopsMetrics.WriteIops)
 	}
-	for x, y := range p.Latpvs {
-		metrics[p.getTopologyPv1(x)] = append(metrics[p.getTopologyPv1(x)], y.readLatency, y.writeLatency)
+
+	for pvUID, latencyMetrics := range p.Latency {
+		metrics[p.getPVTopology(pvUID)] = append(metrics[p.getPVTopology(pvUID)], latencyMetrics.ReadLatency, latencyMetrics.WriteLatency)
 	}
-	for c, d := range p.Tputpvs {
-		metrics[p.getTopologyPv2(c)] = append(metrics[p.getTopologyPv2(c)], d.readThroughput, d.writeThroughput)
+
+	for pvUID, throughputMetrics := range p.Throughput {
+		metrics[p.getPVTopology(pvUID)] = append(metrics[p.getPVTopology(pvUID)], throughputMetrics.ReadThroughput, throughputMetrics.WriteThroughput)
 	}
-	for a, _ := range metrics {
-		resource[a] = node{
-			Metrics: p.metrics(metrics[a]),
+
+	for pvName := range metrics {
+		resource[pvName] = node{
+			Metrics: p.metrics(metrics[pvName]),
 		}
 	}
 	rpt := &report{
@@ -230,9 +236,9 @@ func (p *Plugin) makeReport() (*report, error) {
 		},
 		Plugins: []pluginSpec{
 			{
-				ID:          "iops",
-				Label:       "iops",
-				Description: "Adds a graph of read and write IOPS to PV",
+				ID:          "openebs",
+				Label:       "OpenEBS Plugin",
+				Description: "Adds graphs of metrics of OpenEBS PV",
 				Interfaces:  []string{"reporter"},
 				APIVersion:  "1",
 			},
@@ -244,7 +250,7 @@ func (p *Plugin) makeReport() (*report, error) {
 // Create the Metrics type on top-left side
 func (p *Plugin) metrics(data []float64) map[string]metric {
 	metrics := map[string]metric{
-		"r": {
+		"readIops": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
@@ -252,9 +258,9 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 				},
 			},
 			Min: 0,
-			Max: 20,
+			Max: 100,
 		},
-		"w": {
+		"writeIops": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
@@ -262,9 +268,9 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 				},
 			},
 			Min: 0,
-			Max: 20,
+			Max: 100,
 		},
-		"r1": {
+		"readLatency": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
@@ -272,9 +278,9 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 				},
 			},
 			Min: 0,
-			Max: 20,
+			Max: 100,
 		},
-		"w1": {
+		"writeLatency": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
@@ -282,9 +288,9 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 				},
 			},
 			Min: 0,
-			Max: 20,
+			Max: 100,
 		},
-		"r2": {
+		"readThroughput": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
@@ -292,9 +298,9 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 				},
 			},
 			Min: 0,
-			Max: 20,
+			Max: 100,
 		},
-		"w2": {
+		"writeThroughput": {
 			Samples: []sample{
 				{
 					Date:  time.Now(),
@@ -302,7 +308,7 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 				},
 			},
 			Min: 0,
-			Max: 20,
+			Max: 100,
 		},
 	}
 	return metrics
@@ -310,65 +316,45 @@ func (p *Plugin) metrics(data []float64) map[string]metric {
 
 func (p *Plugin) metricTemplates() map[string]metricTemplate {
 	return map[string]metricTemplate{
-		"r": {
-			ID:       "r",
+		"readIops": {
+			ID:       "readIops",
 			Label:    "Iops(R)",
 			Format:   "",
 			Priority: 0.1,
 		},
-		"w": {
-			ID:       "w",
+		"writeIops": {
+			ID:       "writeIops",
 			Label:    "Iops(W)",
 			Format:   "",
 			Priority: 0.2,
 		},
-		"r1": {
-			ID:       "r1",
+		"readLatency": {
+			ID:       "readLatency",
 			Label:    "Latency(R)",
 			Format:   "millisecond",
 			Priority: 0.3,
 		},
-		"w1": {
-			ID:       "w1",
+		"writeLatency": {
+			ID:       "writeLatency",
 			Label:    "Latency(W)",
 			Format:   "millisecond",
 			Priority: 0.4,
 		},
-		"r2": {
-			ID:       "r2",
-			Label:    "Tput(R)",
+		"readThroughput": {
+			ID:       "readThroughput",
+			Label:    "Throughput(R)",
 			Format:   "bytes",
 			Priority: 0.5,
 		},
-		"w2": {
-			ID:       "w2",
-			Label:    "Tput(W)",
+		"writeThroughput": {
+			ID:       "writeThroughput",
+			Label:    "Throughput(W)",
 			Format:   "bytes",
 			Priority: 0.6,
 		},
 	}
 }
 
-// Report is called by scope when a new report is needed. It is part of the
-// "reporter" interface, which all plugins must implement.
-func (p *Plugin) Report(w http.ResponseWriter, r *http.Request) {
-	rpt, err := p.makeReport()
-	if err != nil {
-		log.Printf("error: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	raw, err := json.Marshal(*rpt)
-	if err != nil {
-		log.Printf("error: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(raw)
-}
-
 func (p *Plugin) metricIDAndName() (string, string) {
-	return "iops", "Iops"
+	return "OpenEBS Plugin", "OpenEBS Plugin"
 }

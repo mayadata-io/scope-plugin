@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func TestMetrics(t *testing.T) {
 		"data containing random values between 0-20": {
 			inputData: []float64{12.6, 5.6, 5.4, 7.8, 19.2, 11.0},
 			expectedOutput: map[string]metric{
-				"r": {
+				"readIops": {
 					Samples: []sample{
 						{
 							Date:  time.Now(),
@@ -24,7 +25,7 @@ func TestMetrics(t *testing.T) {
 					Min: 0,
 					Max: 20,
 				},
-				"w": {
+				"writeIops": {
 					Samples: []sample{
 						{
 							Date:  time.Now(),
@@ -34,7 +35,7 @@ func TestMetrics(t *testing.T) {
 					Min: 0,
 					Max: 20,
 				},
-				"r1": {
+				"readLatency": {
 					Samples: []sample{
 						{
 							Date:  time.Now(),
@@ -44,7 +45,7 @@ func TestMetrics(t *testing.T) {
 					Min: 0,
 					Max: 20,
 				},
-				"w1": {
+				"writeLatency": {
 					Samples: []sample{
 						{
 							Date:  time.Now(),
@@ -54,7 +55,7 @@ func TestMetrics(t *testing.T) {
 					Min: 0,
 					Max: 20,
 				},
-				"r2": {
+				"readThroughput": {
 					Samples: []sample{
 						{
 							Date:  time.Now(),
@@ -64,7 +65,7 @@ func TestMetrics(t *testing.T) {
 					Min: 0,
 					Max: 20,
 				},
-				"w2": {
+				"writeThroughput": {
 					Samples: []sample{
 						{
 							Date:  time.Now(),
@@ -99,39 +100,39 @@ func TestMetricTemplate(t *testing.T) {
 		"data containing random values between 0-20": {
 			inputData: []float64{12.6, 5.6, 5.4, 7.8, 19.2, 11.0},
 			expectedOutput: map[string]metricTemplate{
-				"r": {
-					ID:       "r",
+				"readIops": {
+					ID:       "readIops",
 					Label:    "Iops(R)",
 					Format:   "",
 					Priority: 0.1,
 				},
-				"w": {
-					ID:       "w",
+				"writeIops": {
+					ID:       "writeIops",
 					Label:    "Iops(W)",
 					Format:   "",
 					Priority: 0.2,
 				},
-				"r1": {
-					ID:       "r1",
+				"readLatency": {
+					ID:       "readLatency",
 					Label:    "Latency(R)",
 					Format:   "millisecond",
 					Priority: 0.3,
 				},
-				"w1": {
-					ID:       "w1",
+				"writeLatency": {
+					ID:       "writeLatency",
 					Label:    "Latency(W)",
 					Format:   "millisecond",
 					Priority: 0.4,
 				},
-				"r2": {
-					ID:       "r2",
-					Label:    "Tput(R)",
+				"readThroughput": {
+					ID:       "readThroughput",
+					Label:    "Throughput(R)",
 					Format:   "bytes",
 					Priority: 0.5,
 				},
-				"w2": {
-					ID:       "w2",
-					Label:    "Tput(W)",
+				"writeThroughput": {
+					ID:       "writeThroughput",
+					Label:    "Throughput(W)",
 					Format:   "bytes",
 					Priority: 0.6,
 				},
@@ -155,8 +156,8 @@ func TestMetricIDAndName(t *testing.T) {
 		id, name string
 	}{
 		"id and name ": {
-			id:   "iops",
-			name: "Iops",
+			id:   "OpenEBS Plugin",
+			name: "OpenEBS Plugin",
 		},
 	}
 
@@ -166,6 +167,96 @@ func TestMetricIDAndName(t *testing.T) {
 			gid, gname := p.metricIDAndName()
 			if gid != tt.id || gname != tt.name {
 				t.Errorf("Test Name :%v\nExpected gid :%v , Expected gname :%v but got gid :%v, got gname :%v", name, tt.id, tt.name, gid, gname)
+			}
+		})
+	}
+}
+func TestResponse(t *testing.T) {
+	dummyJSONResponse := []byte(`{
+		"status": "ready",
+		"data": {
+			"resultType": "dummy",
+			"result": [{
+				"metric": {
+					"__name__": "test",
+					"instance": "test",
+					"job": "testjob",
+					"kubernetes_pod_name": "testpod",
+					"openebs_pv": "testpv"
+				},
+				"value": []
+			}]
+		}
+	}`)
+	wantResponse := new(Metrics)
+	_ = json.Unmarshal(dummyJSONResponse, &wantResponse)
+	tests := []struct {
+		name     string
+		response []byte
+		want     *Metrics
+		wantErr  bool
+	}{
+		{
+			name:     "Test response",
+			response: dummyJSONResponse,
+			want:     wantResponse,
+			wantErr:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Response(tt.response)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Response() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Response() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlugin_getPVTopology(t *testing.T) {
+	type fields struct {
+		HostID     string
+		Iops       map[string]PVMetrics
+		Latency    map[string]PVMetrics
+		Throughput map[string]PVMetrics
+	}
+	type args struct {
+		PVName string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   string
+	}{
+		{
+			name: "Test getPVTopology",
+			fields: fields{
+				HostID:     "test",
+				Iops:       nil,
+				Latency:    nil,
+				Throughput: nil,
+			},
+			args: args{
+				PVName: "testpv",
+			},
+			want: "testpv;<persistent_volume>",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Plugin{
+				HostID:     tt.fields.HostID,
+				Iops:       tt.fields.Iops,
+				Latency:    tt.fields.Latency,
+				Throughput: tt.fields.Throughput,
+			}
+			if got := p.getPVTopology(tt.args.PVName); got != tt.want {
+				t.Errorf("Plugin.getPVTopology() = %v, want %v", got, tt.want)
 			}
 		})
 	}
