@@ -88,31 +88,26 @@ func getValues() map[string]PVMetrics {
 				continue
 			}
 
-			var wIops, rLatency, wLatency, rThroughput, wThroughput float64
+			metrics := PVMetrics{
+				ReadIops: iopsRead,
+			}
 
 			if val, ok := writeIops[pvName]; ok {
-				wIops = val
+				metrics.WriteIops = val
 			}
 			if val, ok := readLatency[pvName]; ok {
-				rLatency = val
+				metrics.ReadLatency = val
 			}
 			if val, ok := writeLatency[pvName]; ok {
-				wLatency = val
+				metrics.WriteLatency = val
 			}
 			if val, ok := readThroughput[pvName]; ok {
-				rThroughput = val
+				metrics.ReadThroughput = val
 			}
 			if val, ok := writeThroughput[pvName]; ok {
-				wThroughput = val
+				metrics.WriteThroughput = val
 			}
-			data[string(meta.UID)] = PVMetrics{
-				ReadIops:        iopsRead,
-				WriteIops:       wIops,
-				ReadLatency:     rLatency,
-				WriteLatency:    wLatency,
-				ReadThroughput:  rThroughput,
-				WriteThroughput: wThroughput,
-			}
+			data[string(meta.UID)] = metrics
 		}
 	}
 	return data
