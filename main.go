@@ -16,9 +16,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// Creating a clientset and making a URL a global variable.
+// URL is the address of cortex agent.
+const URL = "http://cortex-agent-service.maya-system.svc.cluster.local:80/api/v1/query?query="
+
+// Clientset contains kubernetes client..
 var (
-	URL       string
 	ClientSet *kubernetes.Clientset
 )
 
@@ -148,13 +150,9 @@ func main() {
 		log.Error(err)
 	}
 
-	URL = os.Getenv("CORTEXAGENT")
-	if URL == "" {
-		log.Info("Unable to get cortex agent URL")
-	}
-
 	// Put socket in sub-directory to have more control on permissions
 	const socketPath = "/var/run/scope/plugins/openebs/openebs.sock"
+
 	// Handle the exit signal
 	setupSignals(socketPath)
 	listener, err := setupSocket(socketPath)

@@ -23,9 +23,6 @@ spec:
           volumeMounts:
           - name: scope-plugins
             mountPath: /var/run/scope/plugins
-          env:
-          - name: CORTEXAGENT
-            value: "http://cortex-agent-service.maya-system.svc.cluster.local:80/api/v1/query?query="
       volumes:
       - name: scope-plugins
         hostPath:
