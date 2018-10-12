@@ -15,7 +15,7 @@ dependencies:
 test:
   override:
     - cd $SRCDIR && make .iops.uptodate && docker tag weaveworksplugins/scope-iops openebs/scope-iops:$(./tools/image-tag)
-    - docker tag weaveworksplugins/scope-iops openebs/scope-iops:latest
+    - docker tag -f weaveworksplugins/scope-iops openebs/scope-iops:latest
 
 deployment:
   stag:
