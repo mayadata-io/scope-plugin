@@ -9,11 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/openebs/scope-plugin/metrics"
 	"github.com/openebs/scope-plugin/plugin"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 func setupSocket(socketPath string) (net.Listener, error) {
@@ -40,17 +37,6 @@ func setupSignals(socketPath string) {
 }
 
 func main() {
-	// creating in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error(err)
-	}
-
-	// create clientset of kubernetes
-	metrics.ClientSet, err = kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error(err)
-	}
 
 	// Put socket in sub-directory to have more control on permissions
 	const socketPath = "/var/run/scope/plugins/openebs/openebs.sock"

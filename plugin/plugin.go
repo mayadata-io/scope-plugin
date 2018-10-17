@@ -10,7 +10,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// UpdateMetrics calls the Getvalues every 60seconds and stores the metrics.
+// UpdateMetrics calls the Getvalues every 60seconds and stores 
+// the metrics received from the cortex agent.
 func (p *Plugin) UpdateMetrics() {
 	for {
 		Metrics := metrics.GetValues()

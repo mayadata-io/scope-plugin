@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/openebs/scope-plugin/k8s"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 // Query parameters for cortex agent.
@@ -32,8 +32,6 @@ var (
 	writeLatency    = make(map[string]float64)
 	readThroughput  = make(map[string]float64)
 	writeThroughput = make(map[string]float64)
-	// Clientset contains kubernetes client.
-	ClientSet *kubernetes.Clientset
 )
 
 // Mutex is used to lock over metrics structure.
@@ -80,30 +78,36 @@ func GetValues() map[string]PVMetrics {
 			}
 		}
 
-		if query == iopsReadQuery {
+		switch query {
+		case iopsReadQuery:
 			readIops = metrics
-		} else if query == iopsWriteQuery {
+		case iopsWriteQuery:
 			writeIops = metrics
-		} else if query == latencyReadQuery {
+		case latencyReadQuery:
 			readLatency = metrics
-		} else if query == latencyWriteQuery {
+		case latencyWriteQuery:
 			writeLatency = metrics
-		} else if query == throughputReadQuery {
+		case throughputReadQuery:
 			readThroughput = metrics
-		} else if query == throughputWriteQuery {
+		case throughputWriteQuery:
 			writeThroughput = metrics
 		}
 	}
 
 	data := make(map[string]PVMetrics)
 	if len(readIops) > 0 && len(writeIops) > 0 && len(readLatency) > 0 && len(writeLatency) > 0 && len(readThroughput) > 0 && len(writeThroughput) > 0 {
-		for pvName, iopsRead := range readIops {
-			meta, err := ClientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
-			if err != nil {
-				log.Errorf("error in fetching PV: %+v", err)
-				continue
-			}
+		pvList, err := k8s.ClientSet.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
+		if err != nil {
+			log.Error(err)
+		}
 
+		pvUID := make(map[string]string)
+
+		for _, p := range pvList.Items {
+			pvUID[p.GetName()] = string(p.GetUID())
+		}
+
+		for pvName, iopsRead := range readIops {
 			metrics := PVMetrics{
 				ReadIops: iopsRead,
 			}
@@ -123,7 +127,7 @@ func GetValues() map[string]PVMetrics {
 			if val, ok := writeThroughput[pvName]; ok {
 				metrics.WriteThroughput = val
 			}
-			data[string(meta.UID)] = metrics
+			data[pvUID[pvName]] = metrics
 		}
 	}
 	return data
