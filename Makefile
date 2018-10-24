@@ -15,6 +15,7 @@ build:
 image: $(UPTODATE)
 $(UPTODATE): $(EXE) Dockerfile
 	$(SUDO) docker build -t $(IMAGE):latest .
+	$(SUDO) docker save $(IMAGE):latest > plugin.tar
 
 clean:
 	- $(SUDO) docker rmi $(IMAGE)

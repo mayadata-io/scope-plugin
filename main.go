@@ -38,7 +38,7 @@ func setupSignals(socketPath string) {
 
 func main() {
 
-	// Put socket in sub-directory to have more control on permissions
+	// Put socket in sub-directory to have more control on permissions.
 	const socketPath = "/var/run/scope/plugins/openebs/openebs.sock"
 
 	// Handle the exit signal
