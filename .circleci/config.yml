@@ -1,0 +1,75 @@
+defaults: &defaults
+  working_directory: /go/src/github.com/openebs/scope-plugin
+  docker:
+    - image: circleci/golang:1.9
+version: 2
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - checkout
+      - run: make
+      - run: go get -u golang.org/x/lint/golint
+      - run: golint
+      - run: go fmt ./...
+      - persist_to_workspace:
+          root: .
+          paths:
+          - plugin.tar
+  unit-test:
+    <<: *defaults
+    parallelism: 1
+    steps:
+      - checkout
+      - run: ./hack/coverage.sh
+      - run: bash <(curl -s https://codecov.io/bash) CODECOV_TOKEN
+  deploy-master:
+    <<: *defaults
+    steps:
+      - checkout
+      - setup_remote_docker
+      - attach_workspace:
+          at: .
+      - run: docker load -i plugin.tar
+      - run: |
+          test -z "${DOCKER_USER}" && exit 0
+          docker login -u $DOCKER_USER -p $DOCKER_PASS
+          docker push openebs/scope-plugin:latest
+  deploy-staging:
+    <<: *defaults
+    steps:
+      - checkout
+      - setup_remote_docker
+      - attach_workspace:
+          at: .
+      - run: docker load -i plugin.tar
+      - run: |
+          test -z "${DOCKER_USER}" && exit 0
+          docker login -u $DOCKER_USER -p $DOCKER_PASS
+          docker tag openebs/scope-plugin:latest openebs/scope-plugin:staging
+          docker push openebs/scope-plugin:staging
+workflows:
+  version: 2
+  test_and_deploy:
+    jobs:
+      - build
+      - unit-test:
+          requires:
+            - build
+      - deploy-master:
+          requires:
+            - build
+            - unit-test
+          filters:
+            branches:
+              only: master
+      - deploy-staging:
+          requires:
+            - build
+            - unit-test
+          filters:
+            branches:
+              only: staging
+
