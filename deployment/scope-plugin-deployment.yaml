@@ -1,0 +1,30 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: weave-scope
+    name: cortex-agent-retriever
+  name: openebs-monitor-plugin
+  namespace: weave
+spec:
+  template:
+    metadata:
+      labels:
+        app: weave-scope
+    spec:
+      hostPID: true
+      serviceAccountName: weave-scope
+      containers:
+        - name: openebs-monitor-plugin
+          image: openebs/scope-plugin:latest
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          volumeMounts:
+          - name: scope-plugins
+            mountPath: /var/run/scope/plugins
+      volumes:
+      - name: scope-plugins
+        hostPath:
+          path: /var/run/scope/plugins
+
