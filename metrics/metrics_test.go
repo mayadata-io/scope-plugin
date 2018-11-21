@@ -69,12 +69,12 @@ func TestNewMetrics(t *testing.T) {
 			name: "Test NewMetrics method",
 			want: PVMetrics{
 				Queries: map[string]string{
-					"iopsReadQuery":        "increase(openebs_reads[5m])/300",
-					"iopsWriteQuery":       "increase(openebs_writes[5m])/300",
-					"latencyReadQuery":     "((increase(openebs_read_time[5m]))/(increase(openebs_reads[5m])))/1000000",
-					"latencyWriteQuery":    "((increase(openebs_write_time[5m]))/(increase(openebs_writes[5m])))/1000000",
-					"throughputReadQuery":  "increase(openebs_read_block_count[5m])/(1024*1024*60*5)",
-					"throughputWriteQuery": "increase(openebs_write_block_count[5m])/(1024*1024*60*5)",
+					"iopsReadQuery":        "irate(openebs_reads[5m])",
+					"iopsWriteQuery":       "irate(openebs_writes[5m])",
+					"latencyReadQuery":     "((irate(openebs_read_time[5m]))/(irate(openebs_reads[5m])))/1000000",
+					"latencyWriteQuery":    "((irate(openebs_write_time[5m]))/(irate(openebs_writes[5m])))/1000000",
+					"throughputReadQuery":  "irate(openebs_read_block_count[5m])/(2048)",
+					"throughputWriteQuery": "irate(openebs_write_block_count[5m])/(2048)",
 				},
 				PVList:    nil,
 				Data:      nil,
