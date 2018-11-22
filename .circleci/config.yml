@@ -36,7 +36,8 @@ jobs:
       - run: |
           test -z "${DOCKER_USER}" && exit 0
           docker login -u $DOCKER_USER -p $DOCKER_PASS
-          docker push openebs/scope-plugin:latest
+          docker tag openebs/scope-plugin:latest openebs/scope-plugin:v1.11.$CIRCLE_BUILD_NUM
+          docker push openebs/scope-plugin:v1.11.$CIRCLE_BUILD_NUM
   deploy-staging:
     <<: *defaults
     steps:
@@ -48,8 +49,7 @@ jobs:
       - run: |
           test -z "${DOCKER_USER}" && exit 0
           docker login -u $DOCKER_USER -p $DOCKER_PASS
-          docker tag openebs/scope-plugin:latest openebs/scope-plugin:staging
-          docker push openebs/scope-plugin:staging
+          docker push openebs/scope-plugin:latest
 workflows:
   version: 2
   test_and_deploy:
