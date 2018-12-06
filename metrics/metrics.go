@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/openebs/scope-plugin/k8s"
 	log "github.com/sirupsen/logrus"
@@ -17,7 +16,7 @@ import (
 
 // URL is the address of cortex agent.
 var (
-	URL = "http://cortex-agent-service.maya-system.svc.cluster.local:80/api/v1/query?query="
+	URL = "http://localhost:80/api/v1/query?query="
 )
 
 // Mutex is used to lock over metrics structure.
@@ -44,7 +43,7 @@ func NewMetrics() PVMetrics {
 func (p *PVMetrics) UpdateMetrics() {
 	for {
 		p.UpdatePVMetrics()
-		time.Sleep(2 * time.Second)
+		// time.Sleep(2 * time.Second)
 	}
 }
 
