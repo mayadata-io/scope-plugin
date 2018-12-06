@@ -132,6 +132,15 @@ func (p *PVMetrics) PVNameAndUID(pvListItems []corev1.PersistentVolume) map[stri
 	return pvList
 }
 
+// GetContainerCountInDeployment will provide count of containers
+func (p *PVMetrics) GetContainerCountInDeployment() int {
+	deploymentSpec, err := p.ClientSet.AppsV1().Deployments("maya-system").Get("openebs-monitor-plugin", metav1.GetOptions{})
+	if err != nil {
+		return 0
+	}
+	return len(deploymentSpec.Spec.Template.Spec.Containers)
+}
+
 // UnmarshalResponse unmarshal the obtained Metric json.
 func (p *PVMetrics) UnmarshalResponse(response []byte) (*Metrics, error) {
 	metric := new(Metrics)

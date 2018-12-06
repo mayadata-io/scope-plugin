@@ -55,7 +55,11 @@ func main() {
 
 	pvMetrics := metrics.NewMetrics()
 	pvMetrics.GetPVList()
+	if count := pvMetrics.GetContainerCountInDeployment(); count < 2 {
+		metrics.URL = "http://cortex-agent-service.maya-system.svc.cluster.local:80/api/v1/query?query="
+	}
 
+	log.Infof("Data Source URL %+v", metrics.URL)
 	go pvMetrics.UpdateMetrics()
 
 	http.HandleFunc("/report", pvMetrics.Report)
