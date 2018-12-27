@@ -96,7 +96,8 @@ func (p *PVMetrics) GetMetrics(query string) (map[string]float64, error) {
 
 	pvMetricsValue := make(map[string]float64)
 	for _, pvMetric := range pvMetrics.Data.Result {
-		if pvMetric.Value[1].(string) == "NaN" {
+		// For handling https://github.com/cortexproject/cortex/blob/1f75367734bd3fd7d106beea86f9901fd1e99750/vendor/github.com/prometheus/prometheus/promql/quantile.go#L64
+		if pvMetric.Value[1].(string) == "NaN" || pvMetric.Value[1].(string) == "+Inf" || pvMetric.Value[1].(string) == "-Inf" {
 			pvMetricsValue[pvMetric.Metric.OpenebsPv] = 0
 		} else {
 			metric, err := strconv.ParseFloat(pvMetric.Value[1].(string), 64)
