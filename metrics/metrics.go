@@ -19,6 +19,8 @@ var (
 	URL = "http://localhost:80/api/v1/query?query="
 )
 
+var Count int = 0
+
 // Mutex is used to lock over metrics structure.
 var Mutex = &sync.Mutex{}
 
@@ -53,12 +55,15 @@ func (p *PVMetrics) UpdatePVMetrics() {
 	for queryName, query := range p.Queries {
 		pvMetricsvalue, err := p.GetMetrics(query)
 		if err != nil {
-			log.Error(err)
+			if Count < 5 {
+				log.Error(err)
+				Count = Count + 1
+			}
 		}
 
 		if pvMetricsvalue == nil {
 			data = nil
-			log.Infof("Failed to fetch metrics for %s", queryName)
+			log.Debugf("Failed to fetch metrics for %s", queryName)
 			break
 		}
 		data[queryName] = pvMetricsvalue
@@ -68,6 +73,7 @@ func (p *PVMetrics) UpdatePVMetrics() {
 		Mutex.Lock()
 		p.Data = data
 		Mutex.Unlock()
+		Count = 0
 	}
 
 	p.GetPVList()
