@@ -340,6 +340,8 @@ func TestPVMetrics_GetMetrics(t *testing.T) {
 	respHavingNoResult := `{"status":"success","data":{"resultType":"vector","result":[]}}`
 	respHavingResultAsNaN := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"OpenEBS__iops","instance":"172.17.0.2:9500","job":"cluster_uuid_9aba2480-a180-41ca-b5cb-f4a099376a16_openebs-volumes","kubernetes_pod_name":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83-ctrl-745784bb48-z9pl8","openebs_pv":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83"},"value":[1528354477.902, "NaN"]}]}}`
 	respHavingProperResult := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"OpenEBS__iops","instance":"172.17.0.2:9500","job":"cluster_uuid_9aba2480-a180-41ca-b5cb-f4a099376a16_openebs-volumes","kubernetes_pod_name":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83-ctrl-745784bb48-z9pl8","openebs_pv":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83"},"value":[1528354477.902, "5"]}]}}`
+	respWithInf := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"OpenEBS__iops","instance":"172.17.0.2:9500","job":"cluster_uuid_9aba2480-a180-41ca-b5cb-f4a099376a16_openebs-volumes","kubernetes_pod_name":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83-ctrl-745784bb48-z9pl8","openebs_pv":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83"},"value":[1528354477.902, "+Inf"]}]}}`
+	respHavingResultAsInf := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"OpenEBS__iops","instance":"172.17.0.2:9500","job":"cluster_uuid_9aba2480-a180-41ca-b5cb-f4a099376a16_openebs-volumes","kubernetes_pod_name":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83-ctrl-745784bb48-z9pl8","openebs_pv":"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83"},"value":[1528354477.902, "-Inf"]}]}}`
 	type args struct {
 		query string
 	}
@@ -441,6 +443,48 @@ func TestPVMetrics_GetMetrics(t *testing.T) {
 			before: func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte(respHavingResultAsNaN))
+				}))
+				URL = testServer.URL
+			},
+			after: func() {
+				URL = tempURL
+				testServer.Close()
+			},
+		},
+		{
+			name:   "when server is started and giving proper JSON as response but value is +Inf",
+			fields: FieldsWithNilValue,
+			args: args{
+				query: "/noQuery",
+			},
+			want: map[string]float64{
+				"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83": 0,
+			},
+			wantErr: false,
+			before: func() {
+				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Write([]byte(respWithInf))
+				}))
+				URL = testServer.URL
+			},
+			after: func() {
+				URL = tempURL
+				testServer.Close()
+			},
+		},
+		{
+			name:   "when server is started and giving proper JSON as response but value is -Inf",
+			fields: FieldsWithNilValue,
+			args: args{
+				query: "/noQuery",
+			},
+			want: map[string]float64{
+				"pvc-4fa13b09-6242-11e8-a310-1458d00e6b83": 0,
+			},
+			wantErr: false,
+			before: func() {
+				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Write([]byte(respHavingResultAsInf))
 				}))
 				URL = testServer.URL
 			},
